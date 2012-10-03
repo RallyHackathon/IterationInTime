@@ -1,172 +1,162 @@
 Ext.define('ScopeChange', {
     extend: 'Rally.app.App',
     layout: { type: 'vbox', align: 'stretch' },
-    appName:'Story Board',
+    appName:'ScopeChanges',
     componentCls: 'app',
 
-    _filters:undefined,
-    _types:['User Story'],
+//    _filters:undefined,
+//    _types:['User Story', 'Defect'],
 
-    items:[
+     items:[
         {
-            xtype:'container',
-            itemId:'header',
-            cls:'header'
+            xtype: 'panel',
+            layout: 'anchor',
+            border: true,
+            fieldDefaults: {
+                labelWidth: 40
+            },
+            defaultType: 'textfield',
+            bodyPadding: 5,
+            items: [
+                {
+                    fieldLabel: 'Query',
+                    itemId: 'queryField',
+                    anchor:'100%',
+                    width: 700,
+                    height: 100,
+                    xtype: 'textarea',
+                    value: '{\n'+
+                            ' "ObjectID": {$gt:0},\n'+
+                            ' "__At": "current"\n'+
+                            '}'
+                },
+                {
+                    fieldLabel: 'Fields',
+                    itemId: 'fieldsField',
+                    anchor: '100%',
+                    width: 700,
+                    value: "ObjectID, _ValidFrom, _UnformattedID, Name"
+                },
+                {
+                    fieldLabel: 'Sort',
+                    itemId: 'sortField',
+                    anchor: '100%',
+                    width: 700,
+                    value: "{'ObjectID' : -1, '_ValidFrom': 1}"
+                },
+                {
+                    fieldLabel: 'Page Size',
+                    itemId: 'pageSizeField',
+                    anchor: '100%',
+                    width: 700,
+                    value: '10'
+                }
+            ],
+            
+            buttons: [
+                {
+                    xtype: 'rallybutton',
+                    text: 'Search',
+                    itemId: 'searchButton'
+                }
+            ]
         },
         {
-            xtype:'container',
-            itemId:'bodyContainer',
-            height:'90%',
-            width:'100%',
-            autoScroll:true
+            xtype: 'panel',
+            itemId: 'gridHolder',
+            layout: 'fit',
+            height: 400
         }
     ],
-
-    _setFilter:function(iteration) {
-        this._filters = [
-            {
-                property:'Iteration.Name',
-                value:iteration
+    
+    launch: function() {
+        var button = this.down('#searchButton');
+        button.on('click', this.searchClicked, this);
+    },
+    
+    searchClicked: function(){
+        var queryField = this.down('#queryField');
+        var query = queryField.getValue();
+        var selectedFields = this.down('#fieldsField').getValue();
+        if(selectedFields){
+            if(selectedFields === 'true'){
+                selectedFields = true;
             }
-        ];
-        this._buildBoard();
-    },
+            else{
+                selectedFields = selectedFields.split(', ');
+            }
+        }
+        
+        var sort = this.down('#sortField').getValue();
+        
+        var pageSize = this.down('#pageSizeField').getValue();
+        var parsedPageSize = parseInt(pageSize, 10);
+        // don't allow empty or 0 pagesize
+        pageSize = (parsedPageSize) ? parsedPageSize : 10;
 
-    _setTypes:function(box, checked) {
-        if(this._types.indexOf(box.inputValue) >= 0 && !checked) {
-            this._types.splice(this._types.indexOf(box.inputValue), 1);
-        } else if((this._types.indexOf(box.inputValue) < 0) && checked) {
-            this._types.push(box.inputValue);
-        }
-        this._buildBoard();
+        var callback = Ext.bind(this.processSnapshots, this);
+        this.doSearch(query, selectedFields, sort, pageSize, callback);
     },
-
-    _buildBoard:function() {
-        if(this._filters === undefined) {
-            return;
+    
+    createSortMap: function(csvFields){
+        var fields = csvFields.split(', ');
+        var sortMap = {};
+        for(var field in fields){
+            if(fields.hasOwnProperty(field)){
+                sortMap[field] = 1;
+            }
         }
-        this.setLoading();
-        if(this._cardBoard !== undefined) {
-            this.down('#bodyContainer').remove(this._cardBoard);
-        }
-        this._cardBoard = Ext.widget('rallycardboard', {
-            types: this._types,
-            itemId:'cardboard',
-            name: 'cardboard',
-            attribute:'ScheduleState',
-            listeners: {
-                    load: function(board, eOpts) {
-                        this.setLoading(false);
-                    },
-                    scope: this
+        
+        return sortMap;
+    },
+    
+    doSearch: function(query, fields, sort, pageSize, callback){
+        var transformStore = Ext.create('Rally.data.lookback.SnapshotStore', {
+            context: {
+                workspace: this.context.getWorkspace(),
+                project: this.context.getProject()
             },
-            storeConfig:{
-                filters: this._filters
+            fetch: fields,
+            rawFind: query,
+            autoLoad: true,
+            listeners: {
+                scope: this,
+                load: this.processSnapshots
             }
         });
-        //this.setLoading(false);
-        this.down('#bodyContainer').add(this._cardBoard);
     },
-
-    // addition of the help component is an afterthought...no support for it built into the SDK atm that I see, so this is a quick and dirty for now.
-    _buildHelpComponent:function (config) {
-        var host = this.context.getWorkspace()._ref.substr(0, this.context.getWorkspace()._ref.indexOf("/slm/"));
-        return Ext.create('Ext.Component', Ext.apply({
-            renderTpl:'<a href="http://www.rallydev.com/help/story-board?basehost='+host+'" title="Launch Help for Story Board App" target="_blank" ' +
-                'class="help"><img id="appHeaderrighthelp" class="appHelp" src="'+host+'/apps/2.0p3/rui/resources/themes/images/default/help/icon_help.png" title="Launch Help" alt="Launch Help" style=""></a>'
-        }, config));
-    },
-
-    /**
-* @override
-*/
-    launch:function () {
-        this.insert(0,this._buildHelpComponent({}));
-        this.down('#header').add([
-            {
-                xtype: 'rallyaddnew',
-                recordTypes: ['User Story', 'Defect', 'Defect Suite'],
-                cls:'add-new',
-                ignoredRequiredFields: ['Name'],
-                listeners: {
-                    recordadd: function(addNew, result) {
-                        this.down('#cardboard').addCard(result.record);
-                    },
-                    beforerecordadd: function(addNew, result) {
-                        result.record.set("Iteration", this.down('#iterationcombobox').getValue());
-                    },
-                    scope: this
+    
+    processSnapshots: function(store, records){
+        var snapshotGrid = Ext.create('Rally.ui.grid.Grid', {
+            title: 'Snapshots',
+            store: store,
+            columnCfgs: [
+                {
+                    text: 'ObjectID',
+                    dataIndex: 'ObjectID'
+                },
+                {
+                    text: 'Name',
+                    dataIndex: 'Name'
+                },
+                {
+                    text: 'Project',
+                    dataIndex: 'Project'
+                },
+                {
+                    text: '_ValidFrom',
+                    dataIndex: '_ValidFrom'
+                },
+                {
+                    text: '_ValidTo',
+                    dataIndex: '_ValidTo'
                 }
-            },
-            {
-                xtype : 'fieldcontainer',
-                fieldLabel : 'Show',
-                defaultType: 'checkboxfield',
-                layout: 'hbox',
-                cls:'checkbox',
-                labelWidth: 40,
-                width: 300,
-                labelAlign: 'right',
-                items: [
-                    {
-                        boxLabel : 'User Stories',
-                        inputValue: 'User Story',
-                        checked : true,
-                        width: 78,
-                        listeners:{
-                            change:function(box, checked) {
-                                this.up('[appName="Story Board"]')._setTypes(box, checked);
-                            }
-                        },
-                        scope: this
-                    }, {
-                        boxLabel : 'Defects',
-                        inputValue: 'Defect',
-                        padding: "0 10",
-                        width: 56,
-                        listeners:{
-                            change:function(box, checked) {
-                                this.up('[appName="Story Board"]')._setTypes(box, checked);
-                            }
-                        },
-                        scope: this
-                    }, {
-                        boxLabel : 'Defect Suites',
-                        inputValue: 'Defect Suite',
-                        padding: "0 20",
-                        width: 84,
-                        listeners:{
-                            change:function(box, checked) {
-                                this.up('[appName="Story Board"]')._setTypes(box, checked);
-                            }
-                        },
-                        scope: this
-                    }
-                ]
-            },
-            {
-                xtype : 'fieldcontainer',
-                fieldLabel : 'Iteration',
-                pack: 'end',
-                labelAlign: 'right',
-                cls: 'iteration-picker',
-                items: [
-                    {
-                        xtype:'rallyiterationcombobox',
-                        itemId:'iterationcombobox',
-                        width: 300,
-                        listeners:{
-                            change:function(combo) {
-                                this._setFilter(combo.getRawValue());
-                            },
-                            ready:function(combo) {
-                                this._setFilter(combo.getRawValue());
-                            },
-                            scope:this
-                        }
-                    }
-                ]
-            }
-        ]);
+            ],
+            height: 400
+        });
+        
+        var gridHolder = this.down('#gridHolder');
+        gridHolder.removeAll(true);
+        gridHolder.add(snapshotGrid);
     }
 });

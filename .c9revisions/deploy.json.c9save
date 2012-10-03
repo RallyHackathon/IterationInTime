@@ -1,0 +1,2 @@
+{"ts":1349294534049,"silentsave":true,"restoring":false,"patch":[[{"diffs":[[1,"{\n    \"server\": \"http://rally1.rallydev.com\",\n    \"username\": \"you@domain.com\",\n    \"password\": \"S3cr3t\",\n    \"project\": \"YourProject\"\n}\n"]],"start1":0,"start2":0,"length1":0,"length2":137}]],"length":137}
+{"contributors":[],"silentsave":true,"ts":1349294539602,"patch":[[{"diffs":[[0,"p://"],[-1,"rally1"],[1,"hackathon"],[0,".ral"]],"start1":20,"start2":20,"length1":14,"length2":17}]],"length":140,"saved":false}

@@ -1,7 +1,7 @@
 {
     "name": "scopechange",
     "className": "ScopeChange",
-    "sdk": "2.0p3",
+    "sdk": "2.0p4",
     "javascript": [
         "App.js"
     ],
