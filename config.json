@@ -1,0 +1,11 @@
+{
+    "name": "scopechange",
+    "className": "ScopeChange",
+    "sdk": "2.0p3",
+    "javascript": [
+        "App.js"
+    ],
+    "css": [
+        "app.css"
+    ]
+}
