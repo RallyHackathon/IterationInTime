@@ -5,14 +5,8 @@ Ext.define('ScopeChange', {
     componentCls: 'app',
 
     launch:function () {
-//        var messageBus = Rally.environment.getContext().getMessageBus();
         var messageBus = Rally.environment.getMessageBus();
         messageBus.addEvents('scopechanged');
-        Rally.data.ModelFactory.getModel({
-            type: 'UserStory',
-            success: this.installComponents,
-            scope: this
-        });
         this.add(Ext.create('Ext.Container', {
             id:'content',
             items:[
@@ -25,8 +19,8 @@ Ext.define('ScopeChange', {
                     xtype:'datepicker'
                 },
                 {
-                    id:'rangeEndInput',
-                    xtype:'datepicker'
+                    id:'iterationInput',
+                    xtype:'rallyiterationcombobox'
                 },
                 {
                     xtype:'rallybutton',
@@ -39,49 +33,48 @@ Ext.define('ScopeChange', {
         messageBus.addListener('scopechanged', this.scopeChangeHandler, this);
     },
 
-    installComponents: function(model) {
-        this.grid = this.add({
-            xtype: 'rallygrid',
-            model: model,
-            columnCfgs: [
-                'FormattedID',
-                'Name',
-                'Owner'
-            ],
-            listeners: {
-                load:Ext.bind(this.initialFilter, this)
-            }
-        });
-    },
-
-    initialFilter:function () {
-        this.applyFilter(function() {
-            return false;
-        });
-    },
+//    installComponents: function(model) {
+//        this.model = model;
+//        this.grid = this.add({
+//            xtype: 'rallygrid',
+//            model: this.model,
+//            columnCfgs: [
+//                'FormattedID',
+//                'Name',
+//                'Owner',
+//                'ScheduleState'
+//            ]
+//        });
+//    },
 
     update:function () {
         var content = this.down('#content');
         var release = content.down('#releaseInput').getValue();
         var start = content.down('#rangeStartInput').getValue();
-        var end = content.down('#rangeEndInput').getValue();
+        var iteration = content.down('#iterationInput').getValue();
         var messageBus = Rally.environment.getMessageBus();
+        console.log(iteration);
+        console.log(release);
         messageBus.fireEvent('scopechanged', {
             release:release,
             start:start,
-            end:end
+            iteration:iteration
         });
     },
 
     scopeChangeHandler:function (event) {
        var start = event.start;
-       this.findArtifactsOpenAtTime(start, this.processSnapshots);
+       var iteration = event.iteration;
+       this.findArtifactsOpenAtTime(start);
        //install callback to create a filter function from results
        // apply function to grid contents
 
     },
 
-    findArtifactsOpenAtTime: function(startDate, processorFunction){
+    findArtifactsOpenAtTime: function(startDate){
+        console.log("creating store");
+        this.AAAAAA = "temp";
+        console.log(this);
         this.transformStore = Ext.create('Rally.data.lookback.SnapshotStore', {
             context: {
                 workspace: this.context.getWorkspace(),
@@ -90,8 +83,13 @@ Ext.define('ScopeChange', {
                 projectScopeDown: true
             },
             filters:[
-                {property:"__At",
-                value: startDate},
+                {
+                    property:"__At",
+                    value: startDate
+                },
+//                {property:"Iteration",
+//                //operator: 'contains',
+//                value: "209" },
                 {property:"_ProjectHierarchy",
                 value: this.context.getProject().ObjectID},
                 {property:"_TypeHierarchy",
@@ -101,26 +99,34 @@ Ext.define('ScopeChange', {
                 operator:'<',
                 value:"Accepted"}
             ],
-            autoLoad: true,
-            listeners: {
-                scope: this,
-                load: processorFunction
-            }
-        });
+            fetch:['ObjectID','Name'],
+            listeners:{
+                load:this.reloadGrid,
+                scope:this
+            },            
+            autoLoad:true
+        }); 
+        console.log(this.transformStore);
     },
-
-    processSnapshots: function() {
-        var oidArray = [];
-        this.transformStore.each(Ext.bind(function(record){
-                oidArray = Ext.Array.push(oidArray, record.get("ObjectID"));
-            }, this));
-        this.applyFilter(function(record) {
-            return Ext.Array.contains(oidArray, record.get("ObjectID"));
-        });
-    },
-
-    applyFilter: function(filterFunction) {
-        this.grid.getStore().filterBy(filterFunction, this);
+    
+    reloadGrid: function(store, records) {
+        if (this.grid) {
+            this.grid.destroy();
+        }
+        console.log("Store is loaded");
+        this.grid = this.add({
+            xtype: 'rallygrid',
+//            model: this.model,
+            store: this.transformStore,
+            columnCfgs: [
+                {text:'ObjectID',
+                dataIndex:'ObjectID'
+                },
+                {text:'Name',
+                dataIndex:'Name'    
+                    }
+            ]
+        });  
     }
 
 });
